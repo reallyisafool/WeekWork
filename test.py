@@ -1,97 +1,55 @@
 import numpy as np
 
 
-num_examples = len(X)  # 训练样本的数量
-nn_input_dim = 2  # 输入层的维度
-nn_output_dim = 2  # 输出层的维度
-
-# 梯度下降的参数（我直接手动赋值）
-epsilon = 0.01  # 梯度下降的学习率
-reg_lambda = 0.01  # 正则化的强度
-# 帮助我们在数据集上估算总体损失的函数
+def sigmoid(X, deriv=False):
+    if(deriv == True):
+        return X*(1-X)
+    return 1/(1 + np.exp(-X))
 
 
-def calculate_loss(model):
-    W1, b1, W2, b2 = model['W1'], model['b1'], model['W2'], model['b2']
-    # 正向传播，计算预测值
-    z1 = X.dot(W1) + b1
-    a1 = np.tanh(z1)
-    z2 = a1.dot(W2) + b2
-    exp_scores = np.exp(z2)
-    probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
-    # 计算损失
-    corect_logprobs = -np.log(probs[range(num_examples), y])
-    data_loss = np.sum(corect_logprobs)
-    # 在损失上加上正则项（可选）
-    data_loss += reg_lambda/2 * (np.sum(np.square(W1)) + np.sum(np.square(W2)))
-    return 1./num_examples * data_loss
+# 构造数据集
+x = np.array([[0, 0, 1],
+              [0, 1, 1],
+              [1, 0, 1],
+              [1, 1, 1],
+              [0, 0, 1]])
 
-# 预测输出（0或1）
+y = np.array([[0], [1], [1], [0], [0]])
 
+# 指定随机的种子,每次运行产生相同数据
+np.random.seed(1)
+# L0有三个特征，L1有4个神经元，所以w0为3行4列,取值范围（-1，1）
+w0 = 2*np.random.random((3, 4))-1
+w1 = 2*np.random.random((4, 1))-1
+# print(w0)
 
-def predict(model, x):
-    W1, b1, W2, b2 = model['W1'], model['b1'], model['W2'], model['b2']
-    # 正向传播
-    z1 = x.dot(W1) + b1
-    a1 = np.tanh(z1)
-    z2 = a1.dot(W2) + b2
-    exp_scores = np.exp(z2)
-    probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
-    return np.argmax(probs, axis=1)
+if __name__ == '__main__':
+    # 神经网络模型构造及训练
+    for j in range(1000001):
+        # L0层
+        l0 = x
+        # 前向传播，计算后l1为5行4列
+        l1 = sigmoid(np.dot(l0, w0))
+        # 前向传播，计算后l2为5行1列
+        l2 = sigmoid(np.dot(l1, w1))
+        # 计算预测值与标签的差异值
+        l2_error = y - l2
+        if(j % 100000) == 0:
+            print('Error'+str(np.mean(np.abs(l2_error))))
+            print(j)
 
-# 这个函数为神经网络学习参数并且返回模型
-# - nn_hdim: 隐藏层的节点数
-# - num_passes: 通过训练集进行梯度下降的次数
-# - print_loss: 如果是True, 那么每1000次迭代就打印一次损失值
+        # 反向传播，计算梯度值
+        # 如l2_error很大，则需要大力度更新；如果l2_error很小，则只需要更新一点点
+        # 所以导数乘以l2_error, *为连个5行一列的矩阵对应位置相乘
+        l2_delta = l2_error * sigmoid(l2, deriv=True)
+        # l2_delta5行1列，w14行1列，
+        l1_error = l2_delta.dot(w1.T)
+        l1_delta = l1_error * sigmoid(l1, deriv=True)
 
-
-def build_model(nn_hdim, num_passes=20000, print_loss=False):
-
-    # 用随机值初始化参数。我们需要学习这些参数
-    np.random.seed(0)
-    W1 = np.random.randn(nn_input_dim, nn_hdim) / np.sqrt(nn_input_dim)
-    b1 = np.zeros((1, nn_hdim))
-    W2 = np.random.randn(nn_hdim, nn_output_dim) / np.sqrt(nn_hdim)
-    b2 = np.zeros((1, nn_output_dim))
-
-    # 这是我们最终要返回的数据
-    model = {}
-
-    # 梯度下降
-    for i in range(0, num_passes):
-
-        # 正向传播
-        z1 = X.dot(W1) + b1
-        a1 = np.tanh(z1)
-        z2 = a1.dot(W2) + b2
-        exp_scores = np.exp(z2)
-        probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
-
-        # 反向传播
-        delta3 = probs
-        delta3[range(num_examples), y] -= 1
-        dW2 = (a1.T).dot(delta3)
-        db2 = np.sum(delta3, axis=0, keepdims=True)
-        delta2 = delta3.dot(W2.T) * (1 - np.power(a1, 2))
-        dW1 = np.dot(X.T, delta2)
-        db1 = np.sum(delta2, axis=0)
-
-        # 添加正则项 (b1 和 b2 没有正则项)
-        dW2 += reg_lambda * W2
-        dW1 += reg_lambda * W1
-
-        # 梯度下降更新参数
-        W1 += -epsilon * dW1
-        b1 += -epsilon * db1
-        W2 += -epsilon * dW2
-        b2 += -epsilon * db2
-
-        # 为模型分配新的参数
-        model = {'W1': W1, 'b1': b1, 'W2': W2, 'b2': b2}
-
-        # 选择性地打印损失
-        # 这种做法很奢侈，因为我们用的是整个数据集，所以我们不想太频繁地这样做
-        if print_loss and i % 1000 == 0:
-            print("Loss after iteration %i: %f" % (i, calculate_loss(model)))
-
-    return model
+        # 更新参数
+        # l1 5行4列，l2_delta5行1列，w1为4行一列
+        w1 += l1.T.dot(l2_delta)
+        # l0 5行3列，l2_delta5行4列，w0为3行4列
+        w0 += l0.T.dot(l1_delta)
+    print("w0=", w0)
+    print("w1=", w1)
